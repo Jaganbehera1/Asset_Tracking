@@ -44,10 +44,6 @@ class AssetEntry(BaseModel):
     location: str
     remarks: Optional[str] = None
 
-@app.get("/")
-def read_root():
-    return {"message": "Asset Tracking API is Running 🚀"}
-
 @app.post("/api/entries")
 async def create_entry(entry: AssetEntry):
     conn = sqlite3.connect('assets.db')
