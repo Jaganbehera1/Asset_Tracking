@@ -8,10 +8,10 @@ import os
 
 app = FastAPI()
 
-# Allow CORS for your frontend
+# Allow CORS for Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://asset-tracking-eight.vercel.app"],
+    allow_origins=["https://asset-tracking-eight.vercel.app"],  # Vercel URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,7 +20,6 @@ app.add_middleware(
 # DB Path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "assets.db")
-
 
 # Asset Schema
 class Asset(BaseModel):
@@ -31,8 +30,7 @@ class Asset(BaseModel):
     status: str
     location: str
 
-
-# Initialize DB + Table creation
+# DB Initialization
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -50,19 +48,16 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 @app.on_event("startup")
 def startup():
     init_db()
 
-
-# Root check API
+# Root API
 @app.get("/")
 def root():
     return {"message": "Asset Tracking API is Running 🚀 Boom 🔥"}
 
-
-# Get all assets
+# Get All Assets
 @app.get("/api/assets")
 def get_assets():
     conn = sqlite3.connect(DB_PATH)
@@ -80,15 +75,14 @@ def get_assets():
             "condition": row[3],
             "last_activity": row[4],
             "status": row[5],
-            "location": row[6],
+            "location": row[6]
         })
 
     return assets
 
-
-# Add Asset
+# Insert Asset
 @app.post("/api/assets")
-def add_asset(asset: Asset):
+def create_asset(asset: Asset):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -97,15 +91,30 @@ def add_asset(asset: Asset):
     """, (asset.name, asset.model, asset.condition, asset.last_activity, asset.status, asset.location))
     conn.commit()
     conn.close()
-    return {"message": "Asset added successfully!"}
 
+    return {"message": "Asset Added Successfully"}
 
 # Delete Asset
 @app.delete("/api/assets/{asset_id}")
 def delete_asset(asset_id: int):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM assets WHERE id=?", (asset_id,))
+    cursor.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
     conn.commit()
     conn.close()
-    return {"message": "Asset deleted successfully!"}
+
+    return {"message": "Asset Deleted Successfully"}
+
+# Update Asset
+@app.put("/api/assets/{asset_id}")
+def update_asset(asset_id: int, asset: Asset):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE assets SET name = ?, model = ?, condition = ?, last_activity = ?, status = ?, location = ?
+        WHERE id = ?
+    """, (asset.name, asset.model, asset.condition, asset.last_activity, asset.status, asset.location, asset_id))
+    conn.commit()
+    conn.close()
+
+    return {"message": "Asset Updated Successfully"}
