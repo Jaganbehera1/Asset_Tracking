@@ -1,14 +1,19 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { QRScanner } from './components/QRScanner';
 import { AssetModal } from './components/AssetModal';
+import { DeleteModal } from './components/DeleteModal';
+import { ManualEntryModal } from './components/ManualEntryModal';
 import { Asset, AssetEntry } from './types';
 import { exportToExcel } from './utils/excel';
-import { QrCode, Download, History, Search, AlertCircle } from 'lucide-react';
+import { QrCode, Download, History, Search, AlertCircle, Trash2, Plus } from 'lucide-react';
 
 function App() {
   const [showScanner, setShowScanner] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showManualEntryModal, setShowManualEntryModal] = useState(false);
   const [scannedAssetId, setScannedAssetId] = useState<string>('');
+  const [selectedAssetId, setSelectedAssetId] = useState<string>('');
   const [assets, setAssets] = useState<Asset[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -45,7 +50,14 @@ function App() {
     setShowModal(true);
   }, []);
 
-  const handleAssetSubmit = async (type: 'entry' | 'exit', location: 'office' | 'client', remarks: string) => {
+  const handleAssetSubmit = async (
+    type: 'entry' | 'exit',
+    location: 'office' | 'client',
+    remarks: string,
+    name: string,
+    model: string,
+    condition: 'working' | 'damaged'
+  ) => {
     const entry: AssetEntry = {
       id: crypto.randomUUID(),
       assetId: scannedAssetId,
@@ -53,6 +65,9 @@ function App() {
       type,
       location,
       remarks,
+      name,
+      model,
+      condition,
     };
 
     try {
@@ -75,6 +90,82 @@ function App() {
       setShowModal(false);
     } catch (error) {
       console.error('Failed to submit entry:', error);
+    }
+  };
+
+  const handleDelete = async (remarks: string) => {
+    const entry: AssetEntry = {
+      id: crypto.randomUUID(),
+      assetId: selectedAssetId,
+      timestamp: new Date(),
+      type: 'delete',
+      location: 'office',
+      remarks,
+    };
+
+    try {
+      const response = await fetch('/api/entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...entry,
+          timestamp: entry.timestamp.toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete asset');
+      }
+
+      await fetchAssets();
+      setShowDeleteModal(false);
+      setSelectedAssetId('');
+    } catch (error) {
+      console.error('Failed to delete asset:', error);
+    }
+  };
+
+  const handleManualEntry = async (data: {
+    assetId: string;
+    name: string;
+    model: string;
+    condition: 'working' | 'damaged';
+    remarks: string;
+  }) => {
+    const entry: AssetEntry = {
+      id: crypto.randomUUID(),
+      assetId: data.assetId,
+      timestamp: new Date(),
+      type: 'entry',
+      location: 'office',
+      remarks: data.remarks,
+      name: data.name,
+      model: data.model,
+      condition: data.condition,
+    };
+
+    try {
+      const response = await fetch('/api/entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...entry,
+          timestamp: entry.timestamp.toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create asset');
+      }
+
+      await fetchAssets();
+      setShowManualEntryModal(false);
+    } catch (error) {
+      console.error('Failed to create asset:', error);
     }
   };
 
@@ -105,8 +196,14 @@ function App() {
             <QrCode className="mr-2" /> Scan QR Code
           </button>
           <button
-            onClick={() => exportToExcel(assets)}
+            onClick={() => setShowManualEntryModal(true)}
             className="bg-green-600 text-white px-6 py-3 rounded-lg flex items-center hover:bg-green-700 transition-colors"
+          >
+            <Plus className="mr-2" /> Add Asset Manually
+          </button>
+          <button
+            onClick={() => exportToExcel(assets)}
+            className="bg-purple-600 text-white px-6 py-3 rounded-lg flex items-center hover:bg-purple-700 transition-colors"
           >
             <Download className="mr-2" /> Export to Excel
           </button>
@@ -141,6 +238,15 @@ function App() {
                     Asset ID
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Model
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Condition
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Last Activity
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -149,11 +255,15 @@ function App() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Location
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredAssets.map((asset) => {
                   const lastEntry = asset.entries[asset.entries.length - 1];
+                  if (lastEntry.type === 'delete') return null;
                   return (
                     <tr key={asset.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -163,6 +273,27 @@ function App() {
                             {asset.id}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {lastEntry.name || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {lastEntry.model || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            lastEntry.condition === 'working'
+                              ? 'bg-green-100 text-green-800'
+                              : lastEntry.condition === 'damaged'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {lastEntry.condition
+                            ? lastEntry.condition.charAt(0).toUpperCase() + lastEntry.condition.slice(1)
+                            : 'Unknown'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-500">
@@ -177,13 +308,23 @@ function App() {
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {lastEntry.type.charAt(0).toUpperCase() +
-                            lastEntry.type.slice(1)}
+                          {lastEntry.type.charAt(0).toUpperCase() + lastEntry.type.slice(1)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lastEntry.location.charAt(0).toUpperCase() +
-                          lastEntry.location.slice(1)}
+                        {lastEntry.location.charAt(0).toUpperCase() + lastEntry.location.slice(1)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setSelectedAssetId(asset.id);
+                            setShowDeleteModal(true);
+                          }}
+                          className="text-red-600 hover:text-red-800 transition-colors"
+                          title="Delete Asset"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -203,6 +344,24 @@ function App() {
           assetId={scannedAssetId}
           onSubmit={handleAssetSubmit}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteModal
+          assetId={selectedAssetId}
+          onConfirm={handleDelete}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedAssetId('');
+          }}
+        />
+      )}
+
+      {showManualEntryModal && (
+        <ManualEntryModal
+          onSubmit={handleManualEntry}
+          onClose={() => setShowManualEntryModal(false)}
         />
       )}
     </div>
