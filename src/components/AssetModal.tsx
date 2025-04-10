@@ -3,7 +3,14 @@ import { Check, X } from 'lucide-react';
 
 interface AssetModalProps {
   assetId: string;
-  onSubmit: (type: 'entry' | 'exit', location: 'office' | 'client', remarks: string) => void;
+  onSubmit: (
+    type: 'entry' | 'exit',
+    location: 'office' | 'client',
+    remarks: string,
+    name: string,
+    model: string,
+    condition: 'working' | 'damaged'
+  ) => void;
   onClose: () => void;
 }
 
@@ -11,10 +18,24 @@ export const AssetModal: React.FC<AssetModalProps> = ({ assetId, onSubmit, onClo
   const [type, setType] = useState<'entry' | 'exit'>('entry');
   const [location, setLocation] = useState<'office' | 'client'>('office');
   const [remarks, setRemarks] = useState('');
+  const [name, setName] = useState('');
+  const [model, setModel] = useState('');
+  const [condition, setCondition] = useState<'working' | 'damaged'>('working');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    if (!name.trim()) newErrors.name = 'Asset name is required';
+    if (!model.trim()) newErrors.model = 'Model number is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(type, location, remarks);
+    if (validateForm()) {
+      onSubmit(type, location, remarks, name, model, condition);
+    }
   };
 
   return (
@@ -30,6 +51,44 @@ export const AssetModal: React.FC<AssetModalProps> = ({ assetId, onSubmit, onClo
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <p className="text-gray-600">Asset ID: {assetId}</p>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Asset Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setErrors({ ...errors, name: '' });
+              }}
+              className={`w-full px-3 py-2 border ${
+                errors.name ? 'border-red-500' : 'border-gray-300'
+              } rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              placeholder="Enter asset name"
+            />
+            {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Model Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => {
+                setModel(e.target.value);
+                setErrors({ ...errors, model: '' });
+              }}
+              className={`w-full px-3 py-2 border ${
+                errors.model ? 'border-red-500' : 'border-gray-300'
+              } rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              placeholder="Enter model number"
+            />
+            {errors.model && <p className="mt-1 text-sm text-red-500">{errors.model}</p>}
           </div>
 
           <div className="mb-4">
@@ -88,6 +147,36 @@ export const AssetModal: React.FC<AssetModalProps> = ({ assetId, onSubmit, onClo
                 }`}
               >
                 Client Site
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Condition <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setCondition('working')}
+                className={`flex-1 py-2 px-4 rounded-md ${
+                  condition === 'working'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                Working
+              </button>
+              <button
+                type="button"
+                onClick={() => setCondition('damaged')}
+                className={`flex-1 py-2 px-4 rounded-md ${
+                  condition === 'damaged'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                Damaged
               </button>
             </div>
           </div>
