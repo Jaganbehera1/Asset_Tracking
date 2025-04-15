@@ -11,7 +11,10 @@ app = FastAPI()
 # Allow CORS for Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://asset-tracking-eight.vercel.app"],  # Vercel URL
+    allow_origins=[
+        "https://asset-tracking-eight.vercel.app",
+        "http://localhost:5173"  # For local development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
