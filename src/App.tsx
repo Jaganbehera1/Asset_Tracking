@@ -4,7 +4,7 @@ import { AssetModal } from './components/AssetModal';
 import { DeleteModal } from './components/DeleteModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { Asset, AssetEntry } from './types';
-import { getAllEntries, createEntry } from './firebase';
+import { getAllEntries, createEntry, moveAssetToDeleted, getDeletedEntries } from './firebase';
 import { exportToExcel } from './utils/excel';
 import { QrCode, Download, History, Search, AlertCircle, Trash2, Plus } from 'lucide-react';
 
@@ -162,22 +162,9 @@ function App() {
       location: 'office',
       remarks,
     };
-
     try {
-      const response = await fetch('/api/entries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...entry,
-          timestamp: entry.timestamp.toISOString(),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete asset');
-      }
+      // Move all related entries to deleted collection and remove from main collection
+      await moveAssetToDeleted(selectedAssetId, { deletedAt: new Date().toISOString(), remarks });
 
       await fetchAssets();
       setShowDeleteModal(false);
@@ -230,20 +217,10 @@ function App() {
     };
 
     try {
-      const response = await fetch('/api/entries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...entry,
-          timestamp: entry.timestamp.toISOString(),
-        }),
+      await createEntry({
+        ...entry,
+        timestamp: entry.timestamp.toISOString(),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to create asset');
-      }
 
       await fetchAssets();
       setShowManualEntryModal(false);
@@ -285,7 +262,30 @@ function App() {
             <Plus className="mr-2" /> Add Asset Manually
           </button>
           <button
-            onClick={() => exportToExcel(assets)}
+            onClick={async () => {
+              try {
+                const deleted = await getDeletedEntries();
+                // normalize deleted entries to AssetEntry[]
+                const deletedRows = deleted.map((d: any) => ({
+                  id: d.id,
+                  assetId: d.assetId,
+                  timestamp: new Date(d.timestamp),
+                  type: d.type,
+                  location: d.location,
+                  remarks: d.remarks,
+                  name: d.name,
+                  model: d.model,
+                  // include deleteRemarks if present
+                  deleteRemarks: d.deleteRemarks || null,
+                }));
+
+                exportToExcel(assets, deletedRows as any);
+              } catch (err) {
+                console.error('Failed to export including deleted entries', err);
+                // fallback
+                exportToExcel(assets);
+              }
+            }}
             className="bg-purple-600 text-white px-6 py-3 rounded-lg flex items-center hover:bg-purple-700 transition-colors"
           >
             <Download className="mr-2" /> Export to Excel
