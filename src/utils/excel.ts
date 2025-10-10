@@ -4,6 +4,25 @@ import { format } from 'date-fns';
 
 // assets: active assets, deletedEntries: optional list of deleted entry rows
 export const exportToExcel = (assets: Asset[], deletedEntries: AssetEntry[] = []) => {
+  // compute current status per asset from its last entry
+  const assetStatusMap = new Map<string, string>();
+  assets.forEach(asset => {
+    const last = asset.entries[asset.entries.length - 1];
+    if (!last) {
+      assetStatusMap.set(asset.id, 'Unknown');
+    } else if (last.type === 'entry') {
+      assetStatusMap.set(asset.id, 'In Stock');
+    } else if (last.type === 'exit') {
+      assetStatusMap.set(asset.id, 'Checked Out');
+    } else if (last.type === 'delete') {
+      assetStatusMap.set(asset.id, 'Deleted');
+    } else {
+      assetStatusMap.set(asset.id, 'Unknown');
+    }
+  });
+
+  const deletedIdSet = new Set<string>(deletedEntries.map(d => d.id));
+
   const activeData = assets.flatMap((asset) =>
     asset.entries.map((entry) => ({
       'Asset ID': asset.id,
@@ -14,6 +33,8 @@ export const exportToExcel = (assets: Asset[], deletedEntries: AssetEntry[] = []
       'Remarks': entry.remarks || '',
       'Name': entry.name || '',
       'Model': entry.model || '',
+      'Source': deletedIdSet.has(entry.id) ? 'Deleted' : 'Active',
+      'Current Status': assetStatusMap.get(asset.id) || 'Unknown',
     }))
   );
 
@@ -26,6 +47,8 @@ export const exportToExcel = (assets: Asset[], deletedEntries: AssetEntry[] = []
     'Remarks': (entry as any).deleteRemarks || entry.remarks || '',
     'Name': entry.name || '',
     'Model': entry.model || '',
+    'Source': 'Deleted',
+    'Current Status': 'Deleted',
   }));
 
   const data = [...activeData, ...deletedData];
