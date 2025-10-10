@@ -4,6 +4,7 @@ import { AssetModal } from './components/AssetModal';
 import { DeleteModal } from './components/DeleteModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { Asset, AssetEntry } from './types';
+import { getAllEntries, createEntry } from './firebase';
 import { exportToExcel } from './utils/excel';
 import { QrCode, Download, History, Search, AlertCircle, Trash2, Plus } from 'lucide-react';
 
@@ -30,18 +31,35 @@ function App() {
   const fetchAssets = async () => {
     try {
       setFetchError(null);
-      const response = await fetch('/api/assets');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setAssets(data.map((asset: any) => ({
-        ...asset,
-        entries: asset.entries.map((entry: any) => ({
-          ...entry,
-          timestamp: new Date(entry.timestamp)
-        }))
-      })));
+      // Read entries from Firestore and group by assetId
+      const rows = await getAllEntries();
+      // rows is an array of entry documents
+      const assetsMap = new Map<string, any[]>();
+      rows.forEach((row: any) => {
+        const assetId = row.assetId || row.asset_id || row.assetId;
+        if (!assetsMap.has(assetId)) assetsMap.set(assetId, []);
+        assetsMap.get(assetId).push({
+          id: row.id,
+          assetId,
+          timestamp: new Date(row.timestamp),
+          type: row.type,
+          location: row.location,
+          remarks: row.remarks,
+          name: row.name,
+          model: row.model,
+          condition: row.condition,
+        });
+      });
+
+      const assetsArr: Asset[] = Array.from(assetsMap.entries()).map(([id, entries]) => ({
+        id,
+        entries: entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+        name: entries[entries.length - 1]?.name,
+        model: entries[entries.length - 1]?.model,
+        condition: entries[entries.length - 1]?.condition,
+      }));
+
+      setAssets(assetsArr);
     } catch (error) {
       console.error('Failed to fetch assets:', error);
       setFetchError('Failed to load assets. Please ensure the backend server is running.');
@@ -123,20 +141,10 @@ function App() {
     }
 
     try {
-      const response = await fetch('/api/entries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...entry,
-          timestamp: entry.timestamp.toISOString(),
-        }),
+      await createEntry({
+        ...entry,
+        timestamp: entry.timestamp.toISOString(),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to create entry');
-      }
 
       await fetchAssets();
       setShowModal(false);
